@@ -1,26 +1,17 @@
-buildscript {
-    repositories {
-        jcenter()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:1.2.3'
-    }
-}
 apply plugin: 'com.android.application'
 
-repositories {
-    jcenter()
-}
-
 android {
-    compileSdkVersion 21
-    buildToolsVersion "21.1.2"
+    compileSdkVersion rootProject.ext.androidCompileSdkVersion
+    buildToolsVersion rootProject.ext.androidBuildToolsVersion
+
     defaultConfig {
         applicationId 'com.github.nkzawa.socketio.androidchat'
-        minSdkVersion 15
-        targetSdkVersion 21
+        minSdkVersion rootProject.ext.androidMinSdkVersion
+        targetSdkVersion rootProject.ext.androidTargetSdkVersion
         versionCode 1
         versionName "1.0"
+
+        buildConfigField "String", "CHAT_SERVER_URL", "\"http://chat.socket.io\""
     }
     buildTypes {
         release {
@@ -28,15 +19,16 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    productFlavors {
-    }
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    compile 'com.android.support:appcompat-v7:21.0.+'
-    compile 'com.android.support:recyclerview-v7:21.0.+'
-    compile ('io.socket:socket.io-client:0.7.0') {
+    Map<String, String> dependencies = rootProject.ext.librariesDependencies;
+
+    compile dependencies.appCompat
+    compile dependencies.recyclerView
+    compile (dependencies.socketio) {
         exclude group: 'org.json', module: 'json'
     }
+
+    testCompile dependencies.junit
 }

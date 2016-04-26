@@ -1,21 +1,25 @@
-package com.github.nkzawa.socketio.androidchat;
+package com.github.nkzawa.socketio.androidchat.ui;
 
 import android.content.Context;
+import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import com.github.nkzawa.socketio.androidchat.R;
+import com.github.nkzawa.socketio.androidchat.model.Message;
 
 import java.util.List;
 
-
 public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHolder> {
 
+    @NonNull
     private List<Message> mMessages;
+
     private int[] mUsernameColors;
 
-    public MessageAdapter(Context context, List<Message> messages) {
+    public MessageAdapter(@NonNull Context context, @NonNull List<Message> messages) {
         mMessages = messages;
         mUsernameColors = context.getResources().getIntArray(R.array.username_colors);
     }
@@ -58,6 +62,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
     }
 
     public class ViewHolder extends RecyclerView.ViewHolder {
+
         private TextView mUsernameView;
         private TextView mMessageView;
 

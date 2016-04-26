@@ -1,4 +1,4 @@
-package com.github.nkzawa.socketio.androidchat;
+package com.github.nkzawa.socketio.androidchat.ui;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -11,30 +11,28 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import io.socket.client.Socket;
-import io.socket.emitter.Emitter;
-import org.json.JSONException;
-import org.json.JSONObject;
 
+import com.github.nkzawa.socketio.androidchat.R;
+import com.github.nkzawa.socketio.androidchat.api.SocketIOEvent;
+import com.github.nkzawa.socketio.androidchat.api.SocketIOManager;
+import com.github.nkzawa.socketio.androidchat.api.response.UserLoggedResponse;
 
 /**
  * A login screen that offers login via username.
  */
 public class LoginActivity extends Activity {
 
+    public static final String NUMBER_OF_USERS = "numUsers";
+    public static final String LOGGED_USER_NAME = "username";
+
     private EditText mUsernameView;
 
     private String mUsername;
-
-    private Socket mSocket;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-
-        ChatApplication app = (ChatApplication) getApplication();
-        mSocket = app.getSocket();
 
         // Set up the login form.
         mUsernameView = (EditText) findViewById(R.id.username_input);
@@ -57,14 +55,14 @@ public class LoginActivity extends Activity {
             }
         });
 
-        mSocket.on("login", onLogin);
+        SocketIOManager.getInstance().addListener(SocketIOEvent.LOGIN, onLogin);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
 
-        mSocket.off("login", onLogin);
+        SocketIOManager.getInstance().removeListener(SocketIOEvent.LOGIN);
     }
 
     /**
@@ -91,26 +89,22 @@ public class LoginActivity extends Activity {
         mUsername = username;
 
         // perform the user login attempt.
-        mSocket.emit("add user", username);
+        SocketIOManager.getInstance().send(SocketIOEvent.ADD_USER, username);
     }
 
-    private Emitter.Listener onLogin = new Emitter.Listener() {
+    private SocketIOManager.ResponseCallback onLogin = new SocketIOManager.ResponseCallback<UserLoggedResponse>() {
         @Override
-        public void call(Object... args) {
-            JSONObject data = (JSONObject) args[0];
-
-            int numUsers;
-            try {
-                numUsers = data.getInt("numUsers");
-            } catch (JSONException e) {
-                return;
-            }
-
+        public void onResult(UserLoggedResponse result) {
             Intent intent = new Intent();
-            intent.putExtra("username", mUsername);
-            intent.putExtra("numUsers", numUsers);
+            intent.putExtra(LOGGED_USER_NAME, mUsername);
+            intent.putExtra(NUMBER_OF_USERS, result.numOfUsers);
             setResult(RESULT_OK, intent);
             finish();
+        }
+
+        @Override
+        public UserLoggedResponse getResult() {
+            return new UserLoggedResponse();
         }
     };
 }

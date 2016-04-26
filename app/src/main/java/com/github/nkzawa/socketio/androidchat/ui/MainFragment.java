@@ -1,4 +1,4 @@
-package com.github.nkzawa.socketio.androidchat;
+package com.github.nkzawa.socketio.androidchat.ui;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -22,10 +22,15 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
-import io.socket.client.Socket;
-import io.socket.emitter.Emitter;
-import org.json.JSONException;
-import org.json.JSONObject;
+
+import com.github.nkzawa.socketio.androidchat.R;
+import com.github.nkzawa.socketio.androidchat.api.SocketIOEvent;
+import com.github.nkzawa.socketio.androidchat.api.SocketIOManager;
+import com.github.nkzawa.socketio.androidchat.api.response.BaseResponse;
+import com.github.nkzawa.socketio.androidchat.api.response.MessageResponse;
+import com.github.nkzawa.socketio.androidchat.api.response.UserLoggedResponse;
+import com.github.nkzawa.socketio.androidchat.api.response.UserTypingResponse;
+import com.github.nkzawa.socketio.androidchat.model.Message;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,21 +47,14 @@ public class MainFragment extends Fragment {
 
     private RecyclerView mMessagesView;
     private EditText mInputMessageView;
-    private List<Message> mMessages = new ArrayList<Message>();
+    private List<Message> mMessages = new ArrayList<>();
     private RecyclerView.Adapter mAdapter;
     private boolean mTyping = false;
     private Handler mTypingHandler = new Handler();
     private String mUsername;
-    private Socket mSocket;
 
     public MainFragment() {
         super();
-    }
-
-    @Override
-    public void onAttach(Activity activity) {
-        super.onAttach(activity);
-        mAdapter = new MessageAdapter(activity, mMessages);
     }
 
     @Override
@@ -65,16 +63,16 @@ public class MainFragment extends Fragment {
 
         setHasOptionsMenu(true);
 
-        ChatApplication app = (ChatApplication) getActivity().getApplication();
-        mSocket = app.getSocket();
-        mSocket.on(Socket.EVENT_CONNECT_ERROR, onConnectError);
-        mSocket.on(Socket.EVENT_CONNECT_TIMEOUT, onConnectError);
-        mSocket.on("new message", onNewMessage);
-        mSocket.on("user joined", onUserJoined);
-        mSocket.on("user left", onUserLeft);
-        mSocket.on("typing", onTyping);
-        mSocket.on("stop typing", onStopTyping);
-        mSocket.connect();
+        SocketIOManager manager = SocketIOManager.getInstance();
+
+        manager.addListener(SocketIOEvent.SOCKET_EVENT_ERROR, onConnectError);
+        manager.addListener(SocketIOEvent.SOCKET_EVENT_TIMEOUT, onConnectError);
+        manager.addListener(SocketIOEvent.NEW_MESSAGE, onNewMessage);
+        manager.addListener(SocketIOEvent.USER_JOINED, onUserJoined);
+        manager.addListener(SocketIOEvent.USER_LEFT, onUserLeft);
+        manager.addListener(SocketIOEvent.TYPING, onTyping);
+        manager.addListener(SocketIOEvent.STOP_TYPING, onStopTyping);
+        manager.connect();
 
         startSignIn();
     }
@@ -89,14 +87,16 @@ public class MainFragment extends Fragment {
     public void onDestroy() {
         super.onDestroy();
 
-        mSocket.disconnect();
-        mSocket.off(Socket.EVENT_CONNECT_ERROR, onConnectError);
-        mSocket.off(Socket.EVENT_CONNECT_TIMEOUT, onConnectError);
-        mSocket.off("new message", onNewMessage);
-        mSocket.off("user joined", onUserJoined);
-        mSocket.off("user left", onUserLeft);
-        mSocket.off("typing", onTyping);
-        mSocket.off("stop typing", onStopTyping);
+        SocketIOManager manager = SocketIOManager.getInstance();
+
+        manager.disconnect();
+        manager.removeListener(SocketIOEvent.SOCKET_EVENT_ERROR);
+        manager.removeListener(SocketIOEvent.SOCKET_EVENT_TIMEOUT);
+        manager.removeListener(SocketIOEvent.NEW_MESSAGE);
+        manager.removeListener(SocketIOEvent.USER_JOINED);
+        manager.removeListener(SocketIOEvent.USER_LEFT);
+        manager.removeListener(SocketIOEvent.TYPING);
+        manager.removeListener(SocketIOEvent.STOP_TYPING);
     }
 
     @Override
@@ -105,6 +105,7 @@ public class MainFragment extends Fragment {
 
         mMessagesView = (RecyclerView) view.findViewById(R.id.messages);
         mMessagesView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        mAdapter = new MessageAdapter(getActivity(), mMessages);
         mMessagesView.setAdapter(mAdapter);
 
         mInputMessageView = (EditText) view.findViewById(R.id.message_input);
@@ -126,11 +127,13 @@ public class MainFragment extends Fragment {
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if (null == mUsername) return;
-                if (!mSocket.connected()) return;
+                SocketIOManager manager = SocketIOManager.getInstance();
+
+                if (!manager.isConnected()) return;
 
                 if (!mTyping) {
                     mTyping = true;
-                    mSocket.emit("typing");
+                    manager.send(SocketIOEvent.TYPING);
                 }
 
                 mTypingHandler.removeCallbacks(onTypingTimeout);
@@ -159,8 +162,8 @@ public class MainFragment extends Fragment {
             return;
         }
 
-        mUsername = data.getStringExtra("username");
-        int numUsers = data.getIntExtra("numUsers", 1);
+        mUsername = data.getStringExtra(LoginActivity.LOGGED_USER_NAME);
+        int numUsers = data.getIntExtra(LoginActivity.NUMBER_OF_USERS, 1);
 
         addLog(getResources().getString(R.string.message_welcome));
         addParticipantsLog(numUsers);
@@ -225,7 +228,10 @@ public class MainFragment extends Fragment {
 
     private void attemptSend() {
         if (null == mUsername) return;
-        if (!mSocket.connected()) return;
+
+        SocketIOManager manager = SocketIOManager.getInstance();
+
+        if (!manager.isConnected()) return;
 
         mTyping = false;
 
@@ -239,7 +245,7 @@ public class MainFragment extends Fragment {
         addMessage(mUsername, message);
 
         // perform the sending message attempt.
-        mSocket.emit("new message", message);
+        manager.send(SocketIOEvent.NEW_MESSAGE, message);
     }
 
     private void startSignIn() {
@@ -250,8 +256,9 @@ public class MainFragment extends Fragment {
 
     private void leave() {
         mUsername = null;
-        mSocket.disconnect();
-        mSocket.connect();
+        SocketIOManager manager = SocketIOManager.getInstance();
+        manager.disconnect();
+        manager.connect();
         startSignIn();
     }
 
@@ -259,9 +266,9 @@ public class MainFragment extends Fragment {
         mMessagesView.scrollToPosition(mAdapter.getItemCount() - 1);
     }
 
-    private Emitter.Listener onConnectError = new Emitter.Listener() {
+    private SocketIOManager.ResponseCallback<BaseResponse> onConnectError = new SocketIOManager.ResponseCallback<BaseResponse>() {
         @Override
-        public void call(Object... args) {
+        public void onResult(BaseResponse result) {
             getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -270,113 +277,100 @@ public class MainFragment extends Fragment {
                 }
             });
         }
-    };
 
-    private Emitter.Listener onNewMessage = new Emitter.Listener() {
         @Override
-        public void call(final Object... args) {
-            getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    JSONObject data = (JSONObject) args[0];
-                    String username;
-                    String message;
-                    try {
-                        username = data.getString("username");
-                        message = data.getString("message");
-                    } catch (JSONException e) {
-                        return;
-                    }
-
-                    removeTyping(username);
-                    addMessage(username, message);
-                }
-            });
+        public BaseResponse getResult() {
+            return new BaseResponse();
         }
     };
 
-    private Emitter.Listener onUserJoined = new Emitter.Listener() {
-        @Override
-        public void call(final Object... args) {
-            getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    JSONObject data = (JSONObject) args[0];
-                    String username;
-                    int numUsers;
-                    try {
-                        username = data.getString("username");
-                        numUsers = data.getInt("numUsers");
-                    } catch (JSONException e) {
-                        return;
-                    }
 
-                    addLog(getResources().getString(R.string.message_user_joined, username));
-                    addParticipantsLog(numUsers);
-                }
-            });
+    private SocketIOManager.ResponseCallback<MessageResponse> onNewMessage = new SocketIOManager.ResponseCallback<MessageResponse>() {
+        @Override
+        public void onResult(final MessageResponse result) {
+           getActivity().runOnUiThread(new Runnable() {
+               @Override
+               public void run() {
+                   removeTyping(result.userName);
+                   addMessage(result.userName, result.message);
+               }
+           });
+        }
+
+        @Override
+        public MessageResponse getResult() {
+            return new MessageResponse();
         }
     };
 
-    private Emitter.Listener onUserLeft = new Emitter.Listener() {
+    private SocketIOManager.ResponseCallback<UserLoggedResponse> onUserJoined = new SocketIOManager.ResponseCallback<UserLoggedResponse>() {
         @Override
-        public void call(final Object... args) {
+        public void onResult(final UserLoggedResponse result) {
             getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    JSONObject data = (JSONObject) args[0];
-                    String username;
-                    int numUsers;
-                    try {
-                        username = data.getString("username");
-                        numUsers = data.getInt("numUsers");
-                    } catch (JSONException e) {
-                        return;
-                    }
-
-                    addLog(getResources().getString(R.string.message_user_left, username));
-                    addParticipantsLog(numUsers);
-                    removeTyping(username);
+                    addLog(getResources().getString(R.string.message_user_joined, result.userName));
+                    addParticipantsLog(result.numOfUsers);
                 }
             });
         }
-    };
 
-    private Emitter.Listener onTyping = new Emitter.Listener() {
         @Override
-        public void call(final Object... args) {
-            getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    JSONObject data = (JSONObject) args[0];
-                    String username;
-                    try {
-                        username = data.getString("username");
-                    } catch (JSONException e) {
-                        return;
-                    }
-                    addTyping(username);
-                }
-            });
+        public UserLoggedResponse getResult() {
+            return new UserLoggedResponse();
         }
     };
 
-    private Emitter.Listener onStopTyping = new Emitter.Listener() {
+    private SocketIOManager.ResponseCallback<UserLoggedResponse> onUserLeft = new SocketIOManager.ResponseCallback<UserLoggedResponse>() {
         @Override
-        public void call(final Object... args) {
+        public void onResult(final UserLoggedResponse result) {
             getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    JSONObject data = (JSONObject) args[0];
-                    String username;
-                    try {
-                        username = data.getString("username");
-                    } catch (JSONException e) {
-                        return;
-                    }
-                    removeTyping(username);
+                    addLog(getResources().getString(R.string.message_user_left, result.userName));
+                    addParticipantsLog(result.numOfUsers);
+                    removeTyping(result.userName);
                 }
             });
+        }
+
+        @Override
+        public UserLoggedResponse getResult() {
+            return new UserLoggedResponse();
+        }
+    };
+
+    private SocketIOManager.ResponseCallback<UserTypingResponse> onTyping = new SocketIOManager.ResponseCallback<UserTypingResponse>() {
+        @Override
+        public void onResult(final UserTypingResponse result) {
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    addTyping(result.userName);
+                }
+            });
+        }
+
+        @Override
+        public UserTypingResponse getResult() {
+            return new UserTypingResponse();
+        }
+    };
+
+    private SocketIOManager.ResponseCallback<UserTypingResponse> onStopTyping = new SocketIOManager.ResponseCallback<UserTypingResponse>() {
+        @Override
+        public void onResult(final UserTypingResponse result) {
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    removeTyping(result.userName);
+                }
+            });
+        }
+
+        @Override
+        public UserTypingResponse getResult() {
+            return new UserTypingResponse();
         }
     };
 
@@ -386,7 +380,9 @@ public class MainFragment extends Fragment {
             if (!mTyping) return;
 
             mTyping = false;
-            mSocket.emit("stop typing");
+
+            SocketIOManager manager = SocketIOManager.getInstance();
+            manager.send(SocketIOEvent.STOP_TYPING);
         }
     };
 }

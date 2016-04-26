@@ -1,0 +1,14 @@
+ext {
+
+    // Libraries
+    supportLibraryVersion = '23.3.0'
+    jUnitVersion = '4.12'
+    socketionVersion = '0.7.0'
+
+    librariesDependencies = [
+            junit               : "junit:junit:${jUnitVersion}",
+            appCompat           : "com.android.support:appcompat-v7:${supportLibraryVersion}",
+            recyclerView        : "com.android.support:recyclerview-v7:${supportLibraryVersion}",
+            socketio            : "io.socket:socket.io-client:${socketionVersion}"
+    ]
+}
